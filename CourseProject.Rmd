@@ -1,0 +1,108 @@
+---
+title: "Course Assignment"
+output: html_document
+date: "2024-06-03"
+---
+
+## Introduction
+The goal of this project is to predict the manner in which participants performed exercises using the "classe" variable in the training set. We utilized various machine learning models to predict this variable using other available variables in the dataset.
+
+## Data Description
+The dataset contains measurements from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The participants performed barbell lifts correctly and incorrectly in 5 different ways. The dataset is split into a training set and a test set.
+
+### Data Loading and Preparation
+We start by loading the necessary libraries and the dataset. We also see how many observations are in each dataset.
+```{r}
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(DMwR2)
+
+url_train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+data_train <- read.csv(url_train)
+data_test <- read.csv(url_test)
+
+dim(data_train); dim(data_test)
+```
+
+The code below converts the target variable in the training dataset to a categorical type, removes unnecessary columns, converts text columns to numeric, removes columns with more than 95% missing values, and replaces any remaining missing values with zeros.
+```{r, message = FALSE, warning=FALSE}
+data_train$classe <- as.factor(data_train$classe)
+
+data_train <- data_train %>% 
+  select(-X, -user_name, -raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window)
+
+data_train <- data_train %>% 
+  mutate(across(where(is.character), ~ as.numeric(.)))
+
+na_threshold <- 0.95
+data_train <- data_train[, colSums(is.na(data_train)) / nrow(data_train) < na_threshold]
+
+data_train[is.na(data_train)] <- 0
+```
+
+### Data Splitting
+We split the training data into a training set and a validation set to evaluate our models.
+```{r}
+set.seed(123)
+inTrain <- createDataPartition(y = data_train$classe, 
+                               list = FALSE,
+                               p = 0.7)
+training <- data_train[inTrain, ]
+testing <- data_train[-inTrain, ]
+
+dim(training); dim(testing)
+```
+
+## Model Training
+We trained two different models: Random Forest (RF) and Gradient Boosting Machine (GBM). Each model was evaluated using 5-fold cross-validation to ensure robust performance evaluation and prevent overfitting.
+```{r, message = FALSE, warning=FALSE}
+fitControl <- trainControl(method = "cv", number = 5)
+rf <- train(classe ~., data = training, method = "rf", trControl = fitControl)
+rf$finalModel
+```
+
+```{r, message = FALSE, warning=FALSE}
+gbm <- train(classe ~., data = training, method = "gbm", trControl = fitControl)
+gbm$finalModel
+```
+We could see that errors in confusion matrix were small enough.
+
+### Prediction through Models
+```{r}
+predictions_rf <- predict(rf, testing)
+predictions_gbm <- predict(gbm, testing)
+
+rf_accuracy <- confusionMatrix(predictions_rf, testing$classe)$overall["Accuracy"]
+gbm_accuracy <- confusionMatrix(predictions_gbm, testing$classe)$overall["Accuracy"]
+
+cat("Random Forest Accuracy:", rf_accuracy, "\n")
+cat("GBM Accuracy:", gbm_accuracy, "\n")
+```
+
+```{r}
+rf_error <- 1 - rf_accuracy
+gbm_error <- 1 - gbm_accuracy
+
+cat("Expected Out-of-Sample Error (RF):", rf_error, "\n")
+cat("Expected Out-of-Sample Error (GBM):", gbm_error, "\n")
+
+```
+
+The Random Forest model provided the highest accuracy among the models tested, with an accuracy of 99.37% on the testing set. The expected out-of-sample error for the Random Forest model was the lowest at 0.00628, indicating its robustness and reliability. 
+
+### Prediction on Test Cases
+
+Then, we used the best performing model, Random Forest, to predict the manner of exercises for 20 test cases.
+```{r}
+predictions_test <- predict(rf, data_test)
+predictions_test
+```
+
+## Results
+We applied various machine learning techniques to predict the manner in which participants performed exercises. After preprocessing the data to ensure it was suitable for modeling, we split the data into training and testing sets.
+
+Two models were trained: Random Forest (RF) and Gradient Boosting Machine (GBM), both evaluated using 5-fold cross-validation.The Random Forest model demonstrated the highest accuracy and the lowest expected out-of-sample error, indicating it was the most reliable model among those tested.
